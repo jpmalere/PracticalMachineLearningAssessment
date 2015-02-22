@@ -1,0 +1,81 @@
+---
+title: "Human Activity Recognition - Practical Machine Learning - Coursera"
+author: "jmalere"
+date: "Sunday, February 22, 2015"
+output: html_document
+---
+
+## Summary
+
+This document describes a machine learning algorithm that predicts and recognizes human activities. The dataset (http://groupware.les.inf.puc-rio.br/har) contains sensor data from 5 activities. By training the algorithm with 19622 observations it was possible to recognize and predict 20 human activities from the test set.
+
+## Exploratory data analysis
+
+The training and testing data were converted to dataframes.
+```{r}
+training <- read.table("pml-training.csv", header = T, sep = ",")
+testing <- read.table("pml-testing.csv", header = T, sep = ",")
+```
+
+The first exploratory analysis was to check the structure of the training and testing sets.
+```{r results ='hide'}
+str(training)
+str(testing)
+```
+
+It was possible to verify that there are variables with NA values on the testing set. It was also possible to verify that the variables from the first to the seventh columns contained parameters that are not related to the human activities (like timestamp). Because of that a training subset, with the sensor data and the type of activity, was used to train the algorithm.
+```{r}
+training <- training[,c(8:11,37:49,60:68,84:86,102,113:124,140,151:160)]
+```
+
+Box plots, like the one presented below, were plotted in order to check how the variables are related to the class of activity. 
+```{r}
+plot(training$classe,training$gyros_belt_x, ylab = "Gyro Belt X Axis", xlab = "Activity", main = "Gyro Belt X Axis  versus Activities")
+```
+
+## Machine Learning algorithm
+Three algorithms were tested. The first one was the CART (Classification and Regression Trees), the second one was the random forest with principal components and the last one was the random forest with all the variables of the training subset presented on the section above, which was the chosen model for the prediction phase.
+
+### CART
+The CART algorithm was trained with the caret package command below:
+```{r}
+library(caret)
+modelfit1 <- train(classe ~ ., data = training, method = "rpart")
+```
+
+The classification error on the training was evaluated with the following command. Due to the correct estimation of just ~ 50%, this algorithm was not chosen.
+```{r}
+mean(predict(modelfit1,training)==training$classe)
+```
+
+### Random forest with PCA data
+The random forest algorithm was the next alternative on the model selection. In order to check if the 53 variables had any relationship between each other, a PCA was performed.
+```{r warning = FALSE}
+preProc <- preProcess(training[,-c(53)], method="pca")
+trainPC <- predict(preProc, training[,-53])
+library(randomForest)
+# Due to performance, the randomForest package was used directly.
+modelfit2 <- randomForest(training$classe ~ ., data = trainPC)
+mean(predict(modelfit2,trainPC)==training$classe)
+```
+
+The prediction was better than the CART method, but since it is hard to map the predictors of the model with PCA, this method was not chosen.
+
+### Random forest with the training set of the previous section
+A random forest algorithm was the chosen model to predict and recognize human activity. It used the training set that is indicated on the exploratory data analysis section.
+This was the model used for the submission of the Coursera Practical Machine Learning programming assignment.
+The out of sample error will be discussed on the following section.
+```{r}
+modelfit3 <- randomForest(classe ~ ., data = training)
+modelfit3$confusion
+```
+
+## Out of sample error
+In the random forest method there is no need for cross-validation or a separate test set to get an unbiased estimate of the test set error. Each tree is constructed using a different bootstrap sample from the original data. About one-third of the cases are left out of the bootstrap sample and not used in the construction of the kth tree (http://www.stat.berkeley.edu/~breiman/RandomForests/cc_home.htm).
+The out-of-bag error rate can be found by the command below. The 500th element shows the error rate for all the trees up to the 500th tree. It is possible to verify that the OOB error rate is close to ~0.3%.
+```{r}
+tail(modelfit3$err.rate)
+```
+
+## Conclusion
+A random forest algorithm was trained with 53 parameters of the human activity dataset and was able to recognize the type of activity of the Practical Machine Learning programming assignment. 
